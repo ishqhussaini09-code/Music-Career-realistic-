@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apex Music: ICON</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fafc; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        .animate-pop { animation: pop 0.3s ease-out; }
+        @keyframes pop { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+        @keyframes pulse-glow { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+    </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+const { useState, useEffect, useMemo, useCallback } = React;
+
+// ==========================================
+// TYPES / INITIAL STATE
+// ==========================================
+
+const starterArtist = {
+  name: "Alex Nova",
+  genre: "Pop",
+  stats: {
+    vocal: 40, 
+    songwriting: 40, 
+    stage: 30, 
+    creativity: 60,
+    health: 80, 
+    stress: 10, 
+    looks: 70, 
+    passion: 80
+  },
+  social: {
+    subscribers: 0,
+    totalViews: 0,
+    posts: [],
+    likes: 0,
+    comments: [],
+    mentions: []
+  },
+  finance: {
+    cash: 200, 
+    debt: 0, 
+    incomeThisMonth: 0, 
+    expensesThisMonth: 10
+  },
+  career: {
+    fame: 0,
+    phase: "busker",
+    label: null,
+    producerHired: null,
+    recordedSongs: [],
+  },
+  history: [],
+};
+
+// ==========================================
+// UTILITY FUNCTIONS
+// ==========================================
+
+const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+
+const formatCash = (n) => `$${Math.round(n).toLocaleString()}`;
+
+const phaseNames = {
+  busker: "🚶 Busker",
+  rising: "⭐ Rising Star",
+  mainstream: "🔥 Mainstream",
+  superstar: "👑 Superstar",
+  icon: "💎 Icon"
+};
+
+const getPhaseFromFame = (fame) => {
+  if (fame >= 100) return "icon";
+  if (fame >= 75) return "superstar";
+  if (fame >= 50) return "mainstream";
+  if (fame >= 25) return "rising";
+  return "busker";
+};
+
+// ==========================================
+// MAIN APP
+// ==========================================
+
+function App() {
+  const [artist, setArtist] = useState(null);
+  const [screen, setScreen] = useState("start");
+  const [activeTab, setActiveTab] = useState("social");
+  const [turn, setTurn] = useState(1);
+  const [toast, setToast] = useState("");
+  const [gameOver, setGameOver] = useState(false);
+  const [gameWon, setGameWon] = useState(false);
+
+  // Toast notification
+  const notif = useCallback((msg, duration = 3000) => {
+    setToast(msg);
+    const timer = setTimeout(() => setToast(""), duration);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Deep clone artist state
+  const updateArtist = useCallback((updater) => {
+    setArtist(prev => {
+      if (!prev) return prev;
+      const next = updater(JSON.parse(JSON.stringify(prev)));
+      
+      // Check win condition
+      if (next.career.fame >= 100) {
+        setGameWon(true);
+      }
+      
+      // Check lose condition
+      if (next.stats.health <= 0) {
+        setGameOver(true);
+      }
+      
+      // Check debt spiral
+      if (next.finance.cash < -500) {
+        setGameOver(true);
+      }
+      
+      return next;
+    });
+  }, []);
+
+  // ==========================================
+  // GAME ACTIONS
+  // ==========================================
+
+  const startNewGame = useCallback((name, genre) => {
+    let a = JSON.parse(JSON.stringify(starterArtist));
+    a.name = name || "Alex Nova";
+    a.genre = genre || "Pop";
+    
+    // Randomize initial stats
+    a.stats.vocal = clamp(20 + Math.floor(Math.random() * 40), 0, 100);
+    a.stats.songwriting = clamp(20 + Math.floor(Math.random() * 40), 0, 100);
+    a.stats.stage = clamp(10 + Math.floor(Math.random() * 30), 0, 100);
+    a.stats.creativity = clamp(30 + Math.floor(Math.random() * 40), 0, 100);
+    a.stats.health = clamp(70 + Math.floor(Math.random() * 30), 0, 100);
+    a.stats.stress = clamp(5 + Math.floor(Math.random() * 20), 0, 100);
+    a.finance.cash = 50 + Math.floor(Math.random() * 200);
+    
+    setArtist(a);
+    setTurn(1);
+    setScreen("game");
+    setGameOver(false);
+    setGameWon(false);
+    notif("Your journey begins. Make every move count.");
+  }, [notif]);
+
+  // ADVANCE 1 WEEK
+  const advanceWeek = useCallback(() => {
+    if (!artist || gameOver || gameWon) return;
+    
+    updateArtist(prev => {
+      // Natural decay
+      prev.stats.health -= Math.max(0, prev.stats.stress * 0.08);
+      prev.stats.stress = clamp(prev.stats.stress + 1, 0, 100);
+      prev.stats.passion = clamp(prev.stats.passion - 1, 0, 100);
+      
+      prev.finance.expensesThisMonth += 10; // living cost
+
+      // Monthly reset (every 4 weeks)
+      if (turn % 4 === 0) {
+        prev.finance.cash -= prev.finance.expensesThisMonth;
+        prev.finance.incomeThisMonth = 0;
+        prev.finance.expensesThisMonth = 10;
+      }
+
+      // Social growth from existing content
+      if (prev.career.recordedSongs && prev.career.recordedSongs.length > 0) {
+        const totalQuality = prev.career.recordedSongs.reduce((sum, s) => sum + s.quality, 0) / 10;
+        const growth = Math.floor(totalQuality * 0.5 + (prev.social.likes || 0) * 0.01);
+        prev.social.subscribers += Math.max(0, growth);
+        prev.social.totalViews += Math.floor((prev.social.likes || 0) * 1.2);
+      }
+
+      // Update career phase based on fame
+      prev.career.phase = getPhaseFromFame(prev.career.fame);
+
+      // Random events
+      if (Math.random() < 0.25) {
+        const eventType = Math.floor(Math.random() * 5);
+        if (eventType === 0 && prev.stats.health > 5) {
+          prev.stats.health -= 5;
+          prev.history.unshift("You caught a cold. Health -5");
+        } else if (eventType === 1) {
+          prev.finance.cash += 20;
+          prev.history.unshift("Found $20 on the street! 💵");
+        } else if (eventType === 2) {
+          prev.stats.creativity = clamp(prev.stats.creativity + 5, 0, 100);
+          prev.history.unshift("Late night inspiration struck! Creativity +5 ✨");
+        } else if (eventType === 3) {
+          prev.stats.stress = clamp(prev.stats.stress + 10, 0, 100);
+          prev.history.unshift("Distressing news received. Stress +10");
+        } else {
+          prev.stats.passion = clamp(prev.stats.passion + 3, 0, 100);
+          prev.history.unshift("Fan message boosted your mood! 💌");
+        }
+      }
+
+      // Clamp all stats
+      Object.keys(prev.stats).forEach(key => {
+        prev.stats[key] = clamp(prev.stats[key], 0, 100);
+      });
+      prev.finance.cash = Math.max(-500, prev.finance.cash);
+
+      return prev;
+    });
+    
+    setTurn(t => t + 1);
+  }, [artist, gameOver, gameWon, turn, updateArtist]);
+
+  // UPLOAD VIDEO
+  const uploadVideo = useCallback(() => {
+    if (!artist) return;
+    
+    const quality = clamp(artist.stats.songwriting * 0.4 + artist.stats.creativity * 0.6, 0, 100);
+    const views = Math.floor(quality * (20 + Math.random() * 80));
+    const likes = Math.floor(views * (0.05 + Math.random() * 0.15));
+    const subsGained = Math.floor(views * 0.015);
+
+    updateArtist(prev => {
+      prev.social.totalViews += views;
+      prev.social.likes = clamp((prev.social.likes || 0) + likes, 0, 999999);
+      prev.social.subscribers += subsGained;
+      
+      if (!prev.social.posts) prev.social.posts = [];
+      prev.social.posts.unshift({
+        id: Date.now(),
+        type: "video",
+        title: `New ${prev.genre} performance`,
+        views, likes, subsGained,
+        time: `Week ${turn}`
+      });
+
+      prev.finance.incomeThisMonth += Math.floor(views * 0.0002);
+      prev.stats.stress = clamp(prev.stats.stress + 3, 0, 100);
+      prev.history.unshift(`🎬 Uploaded video: +${views} views, +${subsGained} subs`);
+      
+      return prev;
+    });
+
+    notif(`Video uploaded! +${views} views, +${subsGained} subscribers`);
+  }, [artist, turn, updateArtist, notif]);
+
+  // HIRE PRODUCER
+  const hireProducer = useCallback((price, qualityBoost) => {
+    if (!artist) return;
+    if (artist.finance.cash < price) {
+      notif("💸 Not enough cash!");
+      return;
+    }
+
+    updateArtist(prev => {
+      prev.finance.cash -= price;
+      prev.stats.creativity = clamp(prev.stats.creativity + qualityBoost, 0, 100);
+      prev.career.producerHired = {
+        name: "DJ Specter",
+        price,
+        qualityBoost
+      };
+      prev.history.unshift(`🎧 Hired producer DJ Specter for ${formatCash(price)}`);
+      return prev;
+    });
+
+    notif("Producer hired! +Creativity boost");
+  }, [artist, updateArtist, notif]);
+
+  // RECORD SONG
+  const recordSong = useCallback(() => {
+    if (!artist) return;
+    
+    if (artist.finance.cash < 50) {
+      notif("💸 Need $50 to record a song!");
+      return;
+    }
+
+    const producerBonus = artist.career.producerHired?.qualityBoost || 0;
+    const quality = clamp(
+      artist.stats.songwriting * 0.5 +
+      artist.stats.vocal * 0.3 +
+      artist.stats.creativity * 0.2 +
+      producerBonus,
+      0,
+      100
+    );
+
+    updateArtist(prev => {
+      if (!prev.career.recordedSongs) prev.career.recordedSongs = [];
+      
+      prev.career.recordedSongs.push({
+        id: Date.now(),
+        title: `Track ${prev.career.recordedSongs.length + 1}`,
+        quality: Math.round(quality),
+        time: `Week ${turn}`
+      });
+
+      prev.stats.creativity = clamp(prev.stats.creativity - 5, 0, 100);
+      prev.stats.stress = clamp(prev.stats.stress + 15, 0, 100);
+      prev.stats.health = clamp(prev.stats.health - 5, 0, 100);
+      prev.finance.cash -= 50;
+      
+      prev.history.unshift(`🎵 Recorded song (quality: ${Math.round(quality)})`);
+      return prev;
+    });
+
+    notif(`Song recorded! Quality: ${Math.round(quality)}`);
+  }, [artist, turn, updateArtist, notif]);
+
+  // RELEASE SONG
+  const releaseSong = useCallback(() => {
+    if (!artist?.career?.recordedSongs?.length) {
+      notif("📀 No songs to release!");
+      return;
+    }
+
+    updateArtist(prev => {
+      const song = prev.career.recordedSongs.pop();
+      const revenue = Math.floor(song.quality * 10 + (prev.social.subscribers * 0.5));
+      const fameGain = Math.max(0.5, song.quality / 20);
+      
+      prev.finance.cash += revenue;
+      prev.finance.incomeThisMonth += revenue;
+      prev.career.fame = clamp(prev.career.fame + fameGain, 0, 150);
+      prev.social.likes = clamp((prev.social.likes || 0) + song.quality * 5, 0, 999999);
+      
+      prev.history.unshift(`💿 Released "${song.title}" - Earned ${formatCash(revenue)}, +${fameGain.toFixed(1)} fame`);
+      return prev;
+    });
+
+    notif("🎉 Song released! Fame increased!");
+  }, [artist, updateArtist, notif]);
+
+  // BUSK (street perform)
+  const busk = useCallback(() => {
+    if (!artist) return;
+
+    updateArtist(prev => {
+      const earned = Math.floor(prev.stats.stage * 0.5 + prev.stats.vocal * 0.3 + Math.random() * 30);
+      prev.finance.cash += earned;
+      prev.finance.incomeThisMonth += earned;
+      
+      prev.stats.stage = clamp(prev.stats.stage + 1, 0, 100);
+      prev.stats.stress = clamp(prev.stats.stress + 5, 0, 100);
+      prev.stats.health = clamp(prev.stats.health - 3, 0, 100);
+      prev.stats.passion = clamp(prev.stats.passion + 5, 0, 100);
+      
+      prev.career.fame = clamp(prev.career.fame + 0.2, 0, 150);
+      prev.history.unshift(`🎸 Busked on streets, earned ${formatCash(earned)}`);
+      
+      return prev;
+    });
+
+    notif("🎤 Great street performance!");
+  }, [artist, updateArtist, notif]);
+
+  // REST
+  const rest = useCallback(() => {
+    if (!artist) return;
+
+    updateArtist(prev => {
+      prev.stats.health = clamp(prev.stats.health + 25, 0, 100);
+      prev.stats.stress = clamp(prev.stats.stress - 20, 0, 100);
+      prev.stats.passion = clamp(prev.stats.passion + 10, 0, 100);
+      prev.history.unshift("😴 Rested and recovered over the weekend");
+      return prev;
+    });
+
+    notif("Recharged! Feel refreshed.");
+  }, [artist, updateArtist, notif]);
+
+  // ==========================================
+  // UI HELPERS
+  // ==========================================
+
+  const renderStats = () => (
+    <div className="grid grid-cols-2 gap-2">
+      {Object.entries(artist.stats).map(([key, val]) => (
+        <div key={key} className="bg-slate-800/50 p-2 rounded border border-slate-700/30">
+          <div className="text-[10px] text-slate-400 uppercase font-semibold">{key}</div>
+          <div className="flex items-center gap-1">
+            <div className="flex-1 h-2 bg-slate-900 rounded overflow-hidden">
+              <div 
+                className={`h-full transition-all ${
+                  val > 70 ? 'bg-green-500' :
+                  val > 40 ? 'bg-blue-500' :
+                  'bg-red-500'
+                }`} 
+                style={{width: `${clamp(val, 0, 100)}%`}} 
+              />
+            </div>
+            <span className="text-xs text-white font-mono w-6 text-right">{Math.round(val)}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderSocial = () => (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-4 rounded-lg border border-slate-700/50">
+          <p className="text-3xl font-bold text-blue-400">{artist?.social?.subscribers?.toLocaleString() || 0}</p>
+          <p className="text-xs text-slate-400 mt-1">Subscribers</p>
+        </div>
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-4 rounded-lg border border-slate-700/50">
+          <p className="text-3xl font-bold text-purple-400">{artist?.social?.totalViews?.toLocaleString() || 0}</p>
+          <p className="text-xs text-slate-400 mt-1">Total Views</p>
+        </div>
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-4 rounded-lg border border-slate-700/50">
+          <p className="text-3xl font-bold text-pink-400">{artist?.social?.likes?.toLocaleString() || 0}</p>
+          <p className="text-xs text-slate-400 mt-1">Likes</p>
+        </div>
+      </div>
+
+      <button 
+        onClick={uploadVideo} 
+        className="w-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all"
+      >
+        🎬 Upload Performance Video
+      </button>
+
+      <div className="mt-4 space-y-2">
+        <h3 className="text-sm font-bold text-slate-300">Recent Activity</h3>
+        {!artist?.social?.posts || artist.social.posts.length === 0 ? (
+          <p className="text-slate-500 text-sm">No posts yet. Upload something!</p>
+        ) : (
+          artist.social.posts.slice(0, 5).map((post) => (
+            <div key={post.id} className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50 hover:border-slate-600/50 transition-all">
+              <p className="text-sm text-white font-medium">{post.title}</p>
+              <div className="flex justify-between text-xs text-slate-400 mt-1">
+                <span>👁️ {post.views}</span>
+                <span>❤️ {post.likes}</span>
+                <span>📈 +{post.subsGained}</span>
+              </div>
+              <p className="text-[10px] text-slate-600 mt-1">{post.time}</p>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
+  const renderStudio = () => (
+    <div className="space-y-4">
+      <h2 className="font-bold text-white text-lg">🎧 Studio Sessions</h2>
+      
+      <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700/50">
+        <p className="text-sm text-slate-300 mb-2">
+          {artist?.career?.producerHired ? (
+            <>
+              <span className="text-emerald-400 font-semibold">✓</span> Producer: <span className="text-white font-semibold">{artist.career.producerHired.name}</span> 
+              <span className="text-emerald-400"> (+{artist.career.producerHired.qualityBoost} creativity)</span>
+            </>
+          ) : (
+            <>No producer hired yet</>
+          )}
+        </p>
+        <button
+          onClick={() => hireProducer(100, 10)}
+          disabled={!artist || artist.finance.cash < 100}
+          className="mt-2 bg-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-indigo-500 text-white px-3 py-1.5 rounded text-sm font-medium transition-all"
+        >
+          Hire DJ Specter ($100)
+        </button>
+      </div>
+
+      <button 
+        onClick={recordSong} 
+        disabled={!artist || artist.finance.cash < 50}
+        className="w-full bg-gradient-to-r from-blue-600 to-blue-500 disabled:opacity-30 disabled:cursor-not-allowed hover:from-blue-500 hover:to-blue-400 text-white py-3 rounded-lg font-semibold transition-all"
+      >
+        🔴 Record Song ($50)
+      </button>
+
+      <div className="mt-4">
+        <h3 className="font-bold text-slate-300 mb-2">Unreleased Tracks ({artist?.career?.recordedSongs?.length || 0})</h3>
+        {!artist?.career?.recordedSongs || artist.career.recordedSongs.length === 0 ? (
+          <p className="text-slate-500 text-sm">No songs recorded. Hit the studio!</p>
+        ) : (
+          <div className="space-y-2">
+            {artist.career.recordedSongs.map(song => (
+              <div key={song.id} className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700/50 hover:border-slate-600/50 transition-all">
+                <div>
+                  <span className="text-sm text-white font-medium">{song.title}</span>
+                  <p className="text-xs text-slate-500">{song.time}</p>
+                </div>
+                <span className="text-xs bg-green-600/80 text-white px-2 py-1 rounded font-semibold">Q: {song.quality}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {artist?.career?.recordedSongs && artist.career.recordedSongs.length > 0 && (
+          <button 
+            onClick={releaseSong} 
+            className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white py-2 rounded-lg font-semibold mt-3 transition-all"
+          >
+            💿 Release Song
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderBusiness = () => (
+    <div className="space-y-4">
+      <h2 className="font-bold text-white text-lg">💼 Business</h2>
+      
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-slate-800 p-3 rounded-lg border border-emerald-500/30">
+          <p className="text-xs text-slate-400">Cash</p>
+          <p className="text-xl font-bold text-emerald-400">{formatCash(artist?.finance?.cash || 0)}</p>
+        </div>
+        <div className="bg-slate-800 p-3 rounded-lg border border-red-500/30">
+          <p className="text-xs text-slate-400">Debt</p>
+          <p className="text-xl font-bold text-red-400">{formatCash(artist?.finance?.debt || 0)}</p>
+        </div>
+        <div className="bg-slate-800 p-3 rounded-lg border border-blue-500/30">
+          <p className="text-xs text-slate-400">Monthly Income</p>
+          <p className="text-lg font-bold text-blue-400">+{formatCash(artist?.finance?.incomeThisMonth || 0)}</p>
+        </div>
+        <div className="bg-slate-800 p-3 rounded-lg border border-orange-500/30">
+          <p className="text-xs text-slate-400">Monthly Expenses</p>
+          <p className="text-lg font-bold text-orange-400">-{formatCash(artist?.finance?.expensesThisMonth || 0)}</p>
+        </div>
+      </div>
+
+      <button 
+        onClick={busk} 
+        className="w-full bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white py-3 rounded-lg font-semibold transition-all"
+      >
+        🎸 Busk on Street (Earn Cash)
+      </button>
+
+      <div className="mt-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700/50">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-xs text-slate-400">Career Phase</p>
+            <p className="text-white font-bold mt-1">{phaseNames[artist?.career?.phase || 'busker']}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-400">Fame Level</p>
+            <p className="text-white font-bold mt-1">{(artist?.career?.fame || 0).toFixed(1)} / 100</p>
+          </div>
+        </div>
+        <div className="mt-3 bg-slate-900 rounded p-2">
+          <div className="flex justify-between mb-1">
+            <span className="text-xs text-slate-400">Fame Progress</span>
+            <span className="text-xs text-slate-300">{Math.min(100, Math.round(artist?.career?.fame || 0))}%</span>
+          </div>
+          <div className="h-3 bg-slate-800 rounded overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-yellow-500 to-purple-500 transition-all"
+              style={{width: `${Math.min(100, (artist?.career?.fame || 0))}%`}}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderHealth = () => (
+    <div className="space-y-4">
+      <h2 className="font-bold text-white text-lg">❤️ Health & Mind</h2>
+      {artist && renderStats()}
+      
+      <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700/50">
+        <p className="text-sm font-semibold text-slate-300 mb-2">Status Report:</p>
+        <div className="space-y-1 text-sm text-slate-400">
+          <p>
+            {artist?.stats?.health < 30 ? "⚠️ Critical condition. You need immediate rest." :
+             artist?.stats?.health < 60 ? "😔 You feel drained. Consider resting." :
+             "✅ You feel okay."}
+          </p>
+          <p>
+            {artist?.stats?.stress > 70 ? "😰 Your head is spinning. Stress is overwhelming." :
+             artist?.stats?.stress > 40 ? "😐 You're feeling tense." :
+             "😊 You're calm and focused."}
+          </p>
+          <p>
+            {artist?.stats?.passion < 30 ? "💔 You're losing your passion for music." :
+             artist?.stats?.passion < 60 ? "🔥 Your passion is steady." :
+             "⚡ You're full of passion and drive!"}
+          </p>
+        </div>
+      </div>
+
+      <button 
+        onClick={rest} 
+        className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white py-3 rounded-lg font-semibold transition-all"
+      >
+        🛌 Rest (Weekend)
+      </button>
+    </div>
+  );
+
+  // ==========================================
+  // START SCREEN
+  // ==========================================
+
+  if (screen === "start" || !artist) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-b from-slate-900 to-slate-950">
+        <div className="text-center mb-8 animate-pop">
+          <span className="text-8xl block mb-2">🎤</span>
+          <h1 className="text-6xl font-black tracking-tighter bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent">APEX MUSIC</h1>
+          <p className="text-transparent bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text font-bold text-2xl mt-2">ICON</p>
+          <p className="text-slate-400 mt-4 text-lg">Build your music empire from zero to superstardom</p>
+          <p className="text-slate-500 mt-1 text-sm">Every choice has consequences. Hard mode: permanent decisions.</p>
+        </div>
+
+        <div className="bg-slate-900 p-8 rounded-xl border border-slate-800 w-full max-w-md space-y-4 shadow-2xl">
+          <h2 className="text-2xl font-bold text-white">Create Your Artist</h2>
+          <div>
+            <label className="text-xs text-slate-400 font-semibold">Artist Name</label>
+            <input 
+              className="w-full bg-slate-800 text-white px-4 py-2 rounded-lg border border-slate-700 focus:border-blue-500 focus:outline-none transition-all mt-1"
+              placeholder="Enter your stage name"
+              id="artistName"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 font-semibold">Genre</label>
+            <select className="w-full bg-slate-800 text-white px-4 py-2 rounded-lg border border-slate-700 focus:border-blue-500 focus:outline-none transition-all mt-1" id="genreSelect">
+              <option>Pop</option>
+              <option>Rock</option>
+              <option>Hip-Hop</option>
+              <option>Electronic</option>
+              <option>R&B</option>
+              <option>Country</option>
+            </select>
+          </div>
+          <button
+            onClick={() => {
+              const name = document.getElementById('artistName')?.value?.trim();
+              const genre = document.getElementById('genreSelect')?.value;
+              startNewGame(name || "Alex Nova", genre || "Pop");
+            }}
+            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white py-3 rounded-lg font-bold text-lg transition-all shadow-lg"
+          >
+            🚀 BEGIN YOUR JOURNEY
+          </button>
+          <p className="text-xs text-slate-500 text-center">Reach 100 fame to unlock the ICON status and win the game!</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // GAME OVER / WIN SCREENS
+  // ==========================================
+
+  if (gameOver && artist) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-b from-red-950 to-slate-950">
+        <div className="text-center mb-8">
+          <span className="text-8xl block mb-4">💔</span>
+          <h1 className="text-5xl font-black text-red-400">GAME OVER</h1>
+          <p className="text-slate-300 mt-4 text-lg">{artist.stats.health <= 0 ? "Your health collapsed." : "You spiraled into debt."}</p>
+          <p className="text-slate-500 mt-2">You reached Week {turn} and {phaseNames[artist.career.phase]}</p>
+        </div>
+        <div className="bg-slate-900 p-8 rounded-xl border border-slate-800 w-full max-w-md text-center space-y-4">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-slate-400">Final Subscribers</p>
+              <p className="text-2xl font-bold text-blue-400">{artist.social.subscribers.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-slate-400">Final Fame</p>
+              <p className="text-2xl font-bold text-purple-400">{artist.career.fame.toFixed(1)}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setScreen("start");
+              setArtist(null);
+            }}
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-lg font-bold transition-all"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (gameWon && artist) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-b from-yellow-900 to-slate-950">
+        <div className="text-center mb-8">
+          <span className="text-8xl block mb-4 animate-pulse">👑</span>
+          <h1 className="text-5xl font-black bg-gradient-to-r from-yellow-400 to-amber-300 bg-clip-text text-transparent">YOU ARE AN ICON!</h1>
+          <p className="text-slate-300 mt-4 text-lg">Congratulations! You reached superstardom!</p>
+        </div>
+        <div className="bg-slate-900 p-8 rounded-xl border border-yellow-600 w-full max-w-md text-center space-y-4">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-slate-400">Final Subscribers</p>
+              <p className="text-2xl font-bold text-blue-400">{artist.social.subscribers.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-slate-400">Fame Level</p>
+              <p className="text-2xl font-bold text-yellow-400">{artist.career.fame.toFixed(1)}</p>
+            </div>
+          </div>
+          <div className="space-y-1 text-sm">
+            <p className="text-slate-400">Weeks Survived: <span className="text-white font-bold">{turn}</span></p>
+            <p className="text-slate-400">Total Earnings: <span className="text-emerald-400 font-bold">{formatCash(artist.finance.cash)}</span></p>
+            <p className="text-slate-400">Peak Genre: <span className="text-white font-bold">{artist.genre}</span></p>
+          </div>
+          <button
+            onClick={() => {
+              setScreen("start");
+              setArtist(null);
+            }}
+            className="w-full bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 text-white py-3 rounded-lg font-bold transition-all"
+          >
+            Play Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // GAME DASHBOARD
+  // ==========================================
+
+  const tabs = [
+    { id: "social", label: "📱 Social", icon: "globe" },
+    { id: "studio", label: "🎧 Studio", icon: "mic" },
+    { id: "business", label: "💰 Business", icon: "dollar" },
+    { id: "health", label: "❤️ Health", icon: "heart" },
+  ];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-950 p-4">
+      <div className="max-w-7xl mx-auto">
+        
+        {/* Toast */}
+        {toast && (
+          <div className="fixed top-4 right-4 bg-slate-800 border border-slate-700 px-4 py-3 rounded-lg shadow-xl animate-pop z-50">
+            <p className="text-sm text-white">{toast}</p>
+          </div>
+        )}
+
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0 bg-slate-900/50 p-4 rounded-lg border border-slate-800">
+          <div>
+            <h1 className="text-4xl font-black text-white flex items-center gap-3">
+              🎤 <span className="bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">{artist?.name}</span>
+            </h1>
+            <div className="flex gap-2 mt-2 flex-wrap">
+              <span className="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300">{artist?.genre}</span>
+              <span className="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300">{phaseNames[artist?.career?.phase]}</span>
+              <span className="text-xs bg-slate-800 px-2 py-1 rounded text-slate-300">Week {turn}</span>
+            </div>
+          </div>
+          <button 
+            onClick={advanceWeek} 
+            className="bg-gradient-to-r from-slate-700 to-slate-600 hover:from-slate-600 hover:to-slate-500 text-white px-6 py-2 rounded-lg font-bold text-sm transition-all shadow-lg"
+          >
+            ⏩ Advance Week
+          </button>
+        </div>
+
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+          {/* Left Sidebar */}
+          <div className="lg:col-span-1 space-y-4">
+            {/* Stats Card */}
+            <div className="bg-slate-900 p-4 rounded-lg border border-slate-800">
+              <h3 className="text-sm font-bold text-slate-300 mb-3">Stats</h3>
+              {artist && renderStats()}
+            </div>
+
+            {/* Event Log Card */}
+            <div className="bg-slate-900 p-4 rounded-lg border border-slate-800 max-h-80 overflow-y-auto">
+              <h3 className="text-sm font-bold text-slate-300 mb-2">📋 Event Log</h3>
+              {!artist?.history || artist.history.length === 0 ? (
+                <p className="text-slate-500 text-xs">No events yet.</p>
+              ) : (
+                <div className="space-y-1">
+                  {artist.history.slice(0, 15).map((log, i) => (
+                    <p key={i} className="text-xs text-slate-400 pb-1 border-b border-slate-800/50 last:border-b-0">
+                      {log}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Main Content Area */}
+          <div className="lg:col-span-3 bg-slate-900 rounded-lg border border-slate-800 overflow-hidden shadow-xl">
+            {/* Tab Navigation */}
+            <div className="flex bg-slate-800/50 border-b border-slate-700/50 overflow-x-auto">
+              {tabs.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 py-3 text-sm font-semibold whitespace-nowrap transition-all ${
+                    activeTab === tab.id 
+                      ? 'bg-slate-900 text-white border-b-2 border-blue-500' 
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab Content */}
+            <div className="p-6 min-h-[500px]">
+              {activeTab === "social" && artist && renderSocial()}
+              {activeTab === "studio" && artist && renderStudio()}
+              {activeTab === "business" && artist && renderBusiness()}
+              {activeTab === "health" && artist && renderHealth()}
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Action Buttons */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <button 
+            onClick={uploadVideo} 
+            className="bg-gradient-to-br from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 text-white p-3 rounded-lg text-sm font-semibold transition-all shadow-lg"
+          >
+            📹 Upload
+          </button>
+          <button 
+            onClick={recordSong} 
+            className="bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white p-3 rounded-lg text-sm font-semibold transition-all shadow-lg"
+          >
+            🎧 Record
+          </button>
+          <button 
+            onClick={releaseSong} 
+            className="bg-gradient-to-br from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white p-3 rounded-lg text-sm font-semibold transition-all shadow-lg"
+          >
+            💿 Release
+          </button>
+          <button 
+            onClick={busk} 
+            className="bg-gradient-to-br from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white p-3 rounded-lg text-sm font-semibold transition-all shadow-lg"
+          >
+            🎸 Busk
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// RENDER
+// ==========================================
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
